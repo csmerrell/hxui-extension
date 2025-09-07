@@ -274,6 +274,7 @@ local function ConsolidateTreasurePoolItems(winnableItems, lostItems)
         if (item.myLot == "--") then
             table.insert(itemCategories[itemName].notLotted, item);
         elseif (item.myLot == "PASS") then
+            -- Do not include in notLotted; only add to lost
             table.insert(itemCategories[itemName].lost, item);
         elseif (item.myLot == "LOT") then
             -- Use server ID for winner check
@@ -296,6 +297,7 @@ local function ConsolidateTreasurePoolItems(winnableItems, lostItems)
                 table.insert(itemCategories[itemName].lost, item);
             end
         else
+            -- Any other status should be considered lost
             table.insert(itemCategories[itemName].lost, item);
         end
     end
@@ -316,30 +318,34 @@ local function ConsolidateTreasurePoolItems(winnableItems, lostItems)
         local lostCount = #categories.lost;
         
         -- Create "not lotted" row if we have items we haven't lotted
-        if (notLottedCount > 0) then
-            -- Sort by slot index (ascending for consistent ordering)
-            table.sort(categories.notLotted, function(a, b) return a.slotIndex < b.slotIndex end);
-            local firstItem = categories.notLotted[1]; -- For sorting position
-            local lastItem = categories.notLotted[#categories.notLotted]; -- For actions
-            -- Find item with shortest timer
-            local shortestItem = categories.notLotted[1];
-            for _, item in ipairs(categories.notLotted) do
+        -- Only include items with myLot == '--' (exclude 'PASS')
+        local filteredNotLotted = {};
+        for _, item in ipairs(categories.notLotted) do
+            if item.myLot == "--" then
+                table.insert(filteredNotLotted, item);
+            end
+        end
+        local filteredNotLottedCount = #filteredNotLotted;
+        if (filteredNotLottedCount > 0) then
+            table.sort(filteredNotLotted, function(a, b) return a.slotIndex < b.slotIndex end);
+            local firstItem = filteredNotLotted[1];
+            local lastItem = filteredNotLotted[#filteredNotLotted];
+            local shortestItem = filteredNotLotted[1];
+            for _, item in ipairs(filteredNotLotted) do
                 if item.timeToLive and shortestItem.timeToLive and item.timeToLive < shortestItem.timeToLive then
                     shortestItem = item;
                 end
             end
             local displayName = itemName;
-            if (notLottedCount > 1) then
-                displayName = string.format("x%d %s", notLottedCount, itemName);
+            if (filteredNotLottedCount > 1) then
+                displayName = string.format("x%d %s", filteredNotLottedCount, itemName);
             end
-            
-            -- Aggregate waiting players (remove duplicates)
             local allWaitingPlayers = {};
             local waitingPlayerSet = {};
-            for _, item in ipairs(categories.notLotted) do
+            for _, item in ipairs(filteredNotLotted) do
                 if (item.waitingFor and item.waitingFor ~= "") then
                     for player in string.gmatch(item.waitingFor, "([^,]+)") do
-                        player = player:match("^%s*(.-)%s*$"); -- trim whitespace
+                        player = player:match("^%s*(.-)%s*$");
                         if (player ~= "" and not waitingPlayerSet[player]) then
                             waitingPlayerSet[player] = true;
                             table.insert(allWaitingPlayers, player);
@@ -347,31 +353,27 @@ local function ConsolidateTreasurePoolItems(winnableItems, lostItems)
                     end
                 end
             end
-            
-            -- Get current winner info
             local currentWinner = "--";
-            for _, item in ipairs(categories.notLotted) do
+            for _, item in ipairs(filteredNotLotted) do
                 if (item.currentWinner and item.currentWinner ~= "--") then
                     currentWinner = item.currentWinner;
                     break;
                 end
             end
-            
             local consolidatedItem = {
                 item = displayName,
                 itemId = lastItem.itemId,
-                slotIndex = firstItem.slotIndex, -- Use first item's slot for sorting
-                actionSlotIndex = lastItem.slotIndex, -- Use last item's slot for actions
-                uuid = lastItem.uuid, -- Use last item's UUID for actions
+                slotIndex = firstItem.slotIndex,
+                actionSlotIndex = lastItem.slotIndex,
+                uuid = lastItem.uuid,
                 myLot = "--",
                 currentWinner = currentWinner,
                 waitingFor = table.concat(allWaitingPlayers, ", "),
                 timeToLive = shortestItem.timeToLive,
                 dropTime = shortestItem.dropTime,
-                consolidatedCount = notLottedCount,
-                sourceItems = categories.notLotted
+                consolidatedCount = filteredNotLottedCount,
+                sourceItems = filteredNotLotted
             };
-            
             table.insert(consolidatedWinnable, consolidatedItem);
         end
         

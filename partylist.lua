@@ -900,6 +900,9 @@ partyList.DrawWindow = function(settings)
             local status = treasurePoolVisible and "enabled" or "disabled";
             print(string.format('[HXUI] Treasure pool %s for this session.', status));
         end
+
+        treasurePoolLib.ClearIgnoredItems()
+        
         rbToggleTriggered = true; -- Prevent multiple toggles
         
         -- Exit controller mode when toggling
